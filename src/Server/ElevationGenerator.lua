@@ -1,15 +1,16 @@
 local ElevationGenerator = {}
-local SEED = math.random(1, 100000)
 
-function ElevationGenerator.Generate(q, r)
-    -- Perlin Noise für weiche Übergänge
-    local noise = math.noise(q / 10, r / 10, SEED)
-    
-    -- Mappe den Noise-Wert (-0.5 bis 0.5) auf unsere Elevation-IDs
-    if noise < -0.15 then return 1      -- Wasser
-    elseif noise < 0.2 then return 2    -- Flachland
-    elseif noise < 0.35 then return 3   -- Hügel
-    else return 4 end                   -- Berg
+function ElevationGenerator.Generate(q, r, noiseVal)
+    -- noiseVal kommt von einem 2D Perlin Noise (-1 bis 1 oder 0 bis 1)
+    if noiseVal < 0.3 then
+        return "Water", 0 -- Unpassierbar / Meer
+    elseif noiseVal < 0.55 then
+        return "Flat", 1 -- Standard-Land (Grasland/Ebene Basis)
+    elseif noiseVal < 0.75 then
+        return "Hills", 2 -- Hügel (Verteidigungsbonus, teurere Bewegung)
+    else
+        return "Mountain", 3 -- Berg (Blockiert Einheiten, hoher Ertrag/Schutz)
+    end
 end
 
 return ElevationGenerator

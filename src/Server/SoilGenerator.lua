@@ -1,18 +1,31 @@
 local SoilGenerator = {}
-local SEED = math.random(1, 100000) + 5000 -- Anderer Seed als die Höhe
 
-function SoilGenerator.Generate(q, r, elevationId)
-    -- Wasser und Berge überschreiben das Biom meistens
-    if elevationId == 1 then return 1 end -- Wasser kriegt Standard-Boden (wird farblich später überschrieben)
-    if elevationId == 4 then return 4 end -- Berge sind immer Felsig
+function SoilGenerator.Generate(elevationType, q, r, altNoiseVal)
+    -- Wasser und Berge bekommen keinen normalen Boden
+    if elevationType == "Water" or elevationType == "Mountain" then
+        return "None"
+    end
     
-    local noise = math.noise(q / 8, r / 8, SEED)
+    -- Nutzt einen zweiten Noise-Wert oder Hash für natürliche Verteilung
+    local biomeNoise = math.noise(q * 0.15, r * 0.15, 42)
     
-    -- Mappe den Noise-Wert auf unsere Soil-IDs
-    if noise < -0.1 then return 3       -- Wüste
-    elseif noise < 0.2 then return 1    -- Grasland
-    elseif noise < 0.4 then return 2    -- Wald
-    else return 4 end                   -- Felsig
+    if elevationType == "Flat" then
+        if biomeNoise < -0.2 then
+            return "Desert"
+        elseif biomeNoise < 0.2 then
+            return "Grassland"
+        else
+            return "Forest"
+        end
+    elseif elevationType == "Hills" then
+        if biomeNoise < 0.3 then
+            return "Rocky"
+        else
+            return "Forest"
+        end
+    end
+    
+    return "Grassland"
 end
 
 return SoilGenerator

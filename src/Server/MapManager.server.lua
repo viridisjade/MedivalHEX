@@ -1,42 +1,56 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local ElevationGenerator = require(script.Parent.ElevationGenerator)
-local SoilGenerator = require(script.Parent.SoilGenerator)
+local ServerScriptService = game:GetService("ServerScriptService")
 
--- RemoteFunction erstellen, damit der Client die Karte abfragen kann
-local getMapEvent = Instance.new("RemoteFunction")
-getMapEvent.Name = "GetMapData"
-getMapEvent.Parent = ReplicatedStorage
+-- Korrekter Zugriff auf die Geschwister-Module im ServerScriptService
+local ElevationGenerator = require(ServerScriptService:WaitForChild("ElevationGenerator"))
+local SoilGenerator = require(ServerScriptService:WaitForChild("SoilGenerator"))
 
-local MAP_RADIUS = 12
-local mapData = {}
-local tileCount = 0
+local MapManager = {}
+MapManager.GridData = {}
 
-local function GenerateWorld()
-    print("Server: Generiere Hex-Welt...")
-    -- Loopt in einem hexagonalen Muster
-    for q = -MAP_RADIUS, MAP_RADIUS do
-        for r = -MAP_RADIUS, MAP_RADIUS do
-            if math.abs(q + r) <= MAP_RADIUS then
-                local elevId = ElevationGenerator.Generate(q, r)
-                local soilId = SoilGenerator.Generate(q, r, elevId)
-                local hexId = q .. "_" .. r
-                
-                mapData[hexId] = {
-                    q = q,
-                    r = r,
-                    elevation = elevId,
-                    soil = soilId
-                }
-                tileCount = tileCount + 1
-            end
+function MapManager.GenerateMap(radius)
+    MapManager.GridData = {}
+    print("Server: Starte 2-Schichten World-Building (Elevation -> Soil)...")
+    
+    for q = -radius, radius do
+        local r1 = math.max(-radius, -q - radius)
+        local r2 = math.min(radius, -q + radius)
+        for r = r1, r2 do
+            local key = q .. "_" .. r
+            
+            -- Schritt 1: Layer 1 (Elevation) generieren
+            local noiseVal = (math.noise(q * 0.1, r * 0.1) + 1) / 2
+            local elevation, heightLevel = ElevationGenerator.Generate(q, r, noiseVal)
+            
+            -- Schritt 2: Layer 2 (Soil / Biome) direkt auf die Elevation legen
+            local soil = SoilGenerator.Generate(elevation, q, r, noiseVal)
+            
+            MapManager.GridData[key] = {
+                q = q,
+                r = r,
+                Elevation = elevation,
+                HeightLevel = heightLevel,
+                Soil = soil
+            }
         end
     end
-    print("Server: Welt generiert! 2-Schichten-Daten für " .. tileCount .. " Felder gespeichert.")
+    print("Server: 2-Schichten Welt erfolgreich generiert!")
+    return MapManager.GridData
 end
 
-GenerateWorld()
+-- RemoteFunction für den Client zur Kartenabfrage
+local getMapFunc = Instance.new("RemoteFunction")
+getMapFunc.Name = "GetMapData"
+getMapFunc.Parent = ReplicatedStorage
 
--- Schickt die Map-Daten an den Client, wenn er spawnt
-getMapEvent.OnServerInvoke = function(player)
-    return mapData
+getMapFunc.OnServerInvoke = function(player)
+    if next(MapManager.GridData) == nil then
+        MapManager.GenerateMap(4)
+    end
+    return MapManager.GridData
 end
+
+-- Initiale Generierung beim Start
+MapManager.GenerateMap(4)
+
+return MapManager

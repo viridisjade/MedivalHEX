@@ -1,14 +1,14 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local player = Players.LocalPlayer
-
 local playerGui = player:WaitForChild("PlayerGui")
 
--- ScreenGui erstellen oder holen
-local screenGui = playerGui:WaitForChild("RoundGui", 10)
+-- Sofortiges Erstellen oder Abrufen des ScreenGui ohne lange Wartezeiten
+local screenGui = playerGui:FindFirstChild("RoundGui")
 if not screenGui then
     screenGui = Instance.new("ScreenGui")
     screenGui.Name = "RoundGui"
+    screenGui.ResetOnSpawn = false
     screenGui.Parent = playerGui
 end
 
@@ -53,7 +53,7 @@ endButton.Parent = screenGui
 local roundEvent = ReplicatedStorage:WaitForChild("EndTurnEvent")
 local resourceEvent = ReplicatedStorage:WaitForChild("ResourceUpdateEvent")
 
--- Alte Verbindungen verhindern (falls Skript neu lädt)
+-- Klick-Logik sauber absichern
 if _G.EndTurnConnected then
     _G.EndTurnConnected:Disconnect()
 end

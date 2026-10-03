@@ -1,0 +1,21 @@
+{
+  "name": "HexStrategyRework",
+  "tree": {
+    "$className": "DataModel",
+    "ReplicatedStorage": {
+      "$path": "src/Shared"
+    },
+    "ServerScriptService": {
+      "$path": "src/Server"
+    },
+    "StarterPlayer": {
+      "$className": "StarterPlayer",
+      "StarterPlayerScripts": {
+        "$path": "src/Client/Scripts"
+      }
+    },
+    "StarterGui": {
+      "$path": "src/Client/Gui"
+    }
+  }
+}

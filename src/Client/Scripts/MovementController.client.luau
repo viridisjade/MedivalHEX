@@ -6,35 +6,48 @@ local HexGridMath = require(ReplicatedStorage:WaitForChild("HexGridMath"))
 local mouse = Players.LocalPlayer:GetMouse()
 local moveEvent = ReplicatedStorage:WaitForChild("MoveUnitEvent", 10)
 local getUnitsFunc = ReplicatedStorage:WaitForChild("GetUnitsData", 10)
+local getMapFunc = ReplicatedStorage:WaitForChild("GetMapData", 10)
 
-if not moveEvent or not getUnitsFunc then return end
+if not moveEvent or not getUnitsFunc or not getMapFunc then return end
+
+-- Karte einmalig abfragen, um die Höhen zu kennen
+local mapData = getMapFunc:InvokeServer() or {}
 
 local selectedUnitId = nil
 local unitParts = {}
 local pathLineParts = {}
 
+-- Dynamische Funktion, um die echte Y-Höhe eines Feldes abzufragen
+local function GetSurfaceY(q, r)
+    local key = q .. "_" .. r
+    local hexData = mapData[key]
+    if not hexData then return 0 end
+    
+    local hasSoil = (hexData.Soil and hexData.Soil ~= "None")
+    return HexGridMath.GetSurfaceHeight(hexData.HeightLevel, hasSoil)
+end
+
 local function ClearPathLines()
     for _, part in ipairs(pathLineParts) do
-        if part and part.Parent then
-            part:Destroy()
-        end
+        if part and part.Parent then part:Destroy() end
     end
     pathLineParts = {}
 end
 
--- Zeichnet eine neon-grüne Linie entlang des Pfades
 local function DrawPathLine(path, uData)
     ClearPathLines()
     if not path or #path == 0 then return end
 
-    -- Sammle alle Koordinaten-Punkte (Start bei der Einheit, dann durch den Pfad)
     local points = {}
-    table.insert(points, HexGridMath.AxialToWorld(uData.q, uData.r, 5.2))
+    -- Linie beginnt leicht über dem Boden
+    local startY = GetSurfaceY(uData.q, uData.r) + 0.5
+    table.insert(points, HexGridMath.AxialToWorld(uData.q, uData.r, startY))
+    
     for _, step in ipairs(path) do
-        table.insert(points, HexGridMath.AxialToWorld(step.q, step.r, 5.2))
+        local stepY = GetSurfaceY(step.q, step.r) + 0.5
+        table.insert(points, HexGridMath.AxialToWorld(step.q, step.r, stepY))
     end
 
-    -- Erstelle Segmente zwischen den Punkten
     for i = 1, #points - 1 do
         local p1 = points[i]
         local p2 = points[i + 1]
@@ -44,7 +57,7 @@ local function DrawPathLine(path, uData)
         linePart.Anchored = true
         linePart.CanCollide = false
         linePart.Material = Enum.Material.Neon
-        linePart.Color = Color3.fromRGB(46, 204, 113) -- Neon-Grün
+        linePart.Color = Color3.fromRGB(46, 204, 113) 
         
         local distance = (p1 - p2).Magnitude
         linePart.Size = Vector3.new(0.6, 0.6, distance)
@@ -68,12 +81,13 @@ local function RenderUnits()
             part.Anchored = true
             part.Parent = workspace
         end
-        part.Position = HexGridMath.AxialToWorld(data.q, data.r, 5)
+        -- Einheit wird exakt auf die Oberfläche (+ 1.5 Studs für den eigenen Mittelpunkt) gesetzt
+        local surfaceY = GetSurfaceY(data.q, data.r)
+        part.Position = HexGridMath.AxialToWorld(data.q, data.r, surfaceY + 1.5)
         unitParts[unitId] = part
     end
 end
 
--- Hover-Logik: Zeichnet in Echtzeit die Ziellinie
 mouse.Move:Connect(function()
     if not selectedUnitId then return end
     local target = mouse.Target
@@ -105,7 +119,6 @@ mouse.Button1Down:Connect(function()
     
     if unitParts["Unit_1"] == target then
         selectedUnitId = "Unit_1"
-        print("Client: Einheit ausgewählt. Bewege die Maus über die Karte, um den Weg als Linie zu sehen.")
         target.Color = Color3.fromRGB(241, 196, 15)
         return
     end
@@ -116,7 +129,6 @@ mouse.Button1Down:Connect(function()
             local targetQ = tonumber(qStr)
             local targetR = tonumber(rStr)
             
-            print("Client: Sende Bewegungs-Pfad an Server...")
             moveEvent:FireServer(selectedUnitId, targetQ, targetR)
             ClearPathLines()
         end
@@ -128,7 +140,10 @@ moveEvent.OnClientEvent:Connect(function(unitId, path)
     if part and path then
         task.spawn(function()
             for _, step in ipairs(path) do
-                local targetWorldPos = HexGridMath.AxialToWorld(step.q, step.r, 5)
+                -- Dynamische Höhenberechnung für jeden Schritt!
+                local surfaceY = GetSurfaceY(step.q, step.r)
+                local targetWorldPos = HexGridMath.AxialToWorld(step.q, step.r, surfaceY + 1.5)
+                
                 local tweenInfo = TweenInfo.new(0.2, Enum.EasingStyle.Linear)
                 local tween = TweenService:Create(part, tweenInfo, {Position = targetWorldPos})
                 tween:Play()

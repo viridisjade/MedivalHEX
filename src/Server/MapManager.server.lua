@@ -1,7 +1,6 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerScriptService = game:GetService("ServerScriptService")
 
--- Korrekter Zugriff auf die Geschwister-Module im ServerScriptService
 local ElevationGenerator = require(ServerScriptService:WaitForChild("ElevationGenerator"))
 local SoilGenerator = require(ServerScriptService:WaitForChild("SoilGenerator"))
 
@@ -10,7 +9,9 @@ MapManager.GridData = {}
 
 function MapManager.GenerateMap(radius)
     MapManager.GridData = {}
-    print("Server: Starte 2-Schichten World-Building (Elevation -> Soil)...")
+    print("Server: Generiere raue 3D-Weltkarte mit fraktalem Noise...")
+    
+    local seed = math.random(1, 100000)
     
     for q = -radius, radius do
         local r1 = math.max(-radius, -q - radius)
@@ -18,11 +19,22 @@ function MapManager.GenerateMap(radius)
         for r = r1, r2 do
             local key = q .. "_" .. r
             
-            -- Schritt 1: Layer 1 (Elevation) generieren
-            local noiseVal = (math.noise(q * 0.1, r * 0.1) + 1) / 2
-            local elevation, heightLevel = ElevationGenerator.Generate(q, r, noiseVal)
+            -- Koordinaten für den Noise
+            local scale = 0.12
+            local nx = (q + r/2) * scale
+            local ny = (r * math.sqrt(3)/2) * scale
             
-            -- Schritt 2: Layer 2 (Soil / Biome) direkt auf die Elevation legen
+            -- Oktave 1: Weiche, riesige Landmassen
+            local baseNoise = math.noise(nx + seed, ny + seed, seed) + 0.5 
+            
+            -- Oktave 2: Hohe Frequenz für raue Details (bricht die Gleichmäßigkeit)
+            local detailNoise = math.noise(nx * 3 + seed, ny * 3 + seed, seed + 100) + 0.5
+            
+            -- Kombination: 80% Grundform, 20% raue Störfaktoren
+            local combinedNoise = (baseNoise * 0.80) + (detailNoise * 0.20)
+            local noiseVal = math.clamp(combinedNoise, 0, 1)
+            
+            local elevation, heightLevel = ElevationGenerator.Generate(q, r, noiseVal)
             local soil = SoilGenerator.Generate(elevation, q, r, noiseVal)
             
             MapManager.GridData[key] = {
@@ -34,23 +46,19 @@ function MapManager.GenerateMap(radius)
             }
         end
     end
-    print("Server: 2-Schichten Welt erfolgreich generiert!")
+    print("Server: Map generiert!")
     return MapManager.GridData
 end
 
--- RemoteFunction für den Client zur Kartenabfrage
 local getMapFunc = Instance.new("RemoteFunction")
 getMapFunc.Name = "GetMapData"
 getMapFunc.Parent = ReplicatedStorage
 
 getMapFunc.OnServerInvoke = function(player)
-    if next(MapManager.GridData) == nil then
-        MapManager.GenerateMap(4)
-    end
+    if not MapManager.GridData["0_0"] then MapManager.GenerateMap(14) end
     return MapManager.GridData
 end
 
--- Initiale Generierung beim Start
-MapManager.GenerateMap(4)
+MapManager.GenerateMap(14)
 
 return MapManager

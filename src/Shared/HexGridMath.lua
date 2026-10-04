@@ -1,10 +1,29 @@
 local HexGridMath = {}
+HexGridMath.HexSize = 6
+
+-- Zentrales 8-Level-Höhenprofil
+HexGridMath.HeightLookup = {
+    [1] = 2,    -- Wasser
+    [2] = 4,    -- Flachland Tief
+    [3] = 6,    -- Flachland Normal
+    [4] = 8,    -- Flachland Hoch
+    [5] = 13,   -- Hügel
+    [6] = 18,   -- Hohe Hügel
+    [7] = 30,   -- Berge
+    [8] = 45    -- Bergspitzen
+}
+
+function HexGridMath.GetSurfaceHeight(heightLevel, hasSoil)
+    local baseThickness = HexGridMath.HeightLookup[heightLevel] or 4
+    local soilThickness = hasSoil and 0.6 or 0
+    -- Die absolute Y-Höhe der Oberfläche des Hexagons
+    return baseThickness + soilThickness
+end
 
 function HexGridMath.AxialToWorld(q, r, height)
-    local size = 6
-    local spacingMultiplier = 1.73 
-    local x = size * (3/2 * q) * spacingMultiplier
-    local z = size * (math.sqrt(3)/2 * q + math.sqrt(3) * r) * spacingMultiplier
+    local size = HexGridMath.HexSize
+    local x = size * (3/2 * q)
+    local z = size * (math.sqrt(3)/2 * q + math.sqrt(3) * r)
     return Vector3.new(x, height or 0, z)
 end
 
@@ -24,19 +43,15 @@ function HexGridMath.Distance(q1, r1, q2, r2)
     return (math.abs(q1 - q2) + math.abs(r1 - r2) + math.abs((q1 + r1) - (q2 + r2))) / 2
 end
 
--- NEU: Kürzeste Route (Breadth-First Search) zwischen zwei Hex-Feldern
 function HexGridMath.FindPath(startQ, startR, goalQ, goalR)
     local startKey = startQ .. "_" .. startR
     local goalKey = goalQ .. "_" .. goalR
     
-    if startKey == goalKey then 
-        return {{q = startQ, r = startR}} 
-    end
+    if startKey == goalKey then return {{q = startQ, r = startR}} end
     
     local queue = { {q = startQ, r = startR} }
     local cameFrom = {}
-    local visited = {}
-    visited[startKey] = true
+    local visited = { [startKey] = true }
     
     local found = false
     while #queue > 0 do
@@ -44,8 +59,7 @@ function HexGridMath.FindPath(startQ, startR, goalQ, goalR)
         local currentKey = current.q .. "_" .. current.r
         
         if currentKey == goalKey then
-            found = true
-            break
+            found = true; break
         end
         
         for _, neighbor in ipairs(HexGridMath.GetNeighbors(current.q, current.r)) do

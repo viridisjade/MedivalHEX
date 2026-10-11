@@ -1,21 +1,28 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local Players = game:GetService("Players")
 
+-- Event, um den Clients mitzuteilen, wer gewonnen hat
 local victoryEvent = Instance.new("RemoteEvent")
 victoryEvent.Name = "VictoryEvent"
 victoryEvent.Parent = ReplicatedStorage
 
-local roundEvent = ReplicatedStorage:WaitForChild("EndTurnEvent")
+-- BindableEvent für das kommende CombatSystem. 
+-- Wenn eine Einheit stirbt, ruft das Kampfsystem dieses Event auf.
+local unitDiedBindable = Instance.new("BindableEvent")
+unitDiedBindable.Name = "UnitDiedBindable"
+unitDiedBindable.Parent = ReplicatedStorage
 
--- Überprüft nach jeder Runde die Siegbedingungen (z.B. maximale Runden oder Städte-Anzahl)
-roundEvent.OnServerEvent:Connect(function(player)
-    -- Beispiel-Bedingung: Wenn Runde 30 erreicht ist oder ein Spieler dominiert
-    -- Für unser Skelett simulieren wir einen Sieg bei Runde 20 als Test
-    -- (Später wird hier z.B. geprüft, ob alle anderen Städte zerstört wurden)
-    
-    local currentRound = 20 -- Platzhalter, wird vom GameLoop gesteuert
-    if currentRound >= 20 then
-        print(string.format("Server: SPIELER %s HAT DAS SPIEL GEWONNEN!", player.Name))
-        victoryEvent:FireAllClients(player.Name, "Dominanz-Sieg")
+unitDiedBindable.Event:Connect(function(deadUnitData)
+    -- Die einzige Siegbedingung im gesamten Spiel:
+    if deadUnitData.unitType == "King" then
+        local loser = deadUnitData.ownerId
+        -- Wenn Player1 den König verliert, gewinnt Player2 und umgekehrt
+        local winner = (loser == "Player1") and "Player2" or "Player1"
+        
+        print(string.format("Server: SCHACHMATT! Der Koenig von %s ist gefallen! %s gewinnt das Spiel!", loser, winner))
+        
+        -- Allen Spielern den Sieger verkünden
+        victoryEvent:FireAllClients(winner, loser)
     end
 end)
+
+print("Server: VictorySystem geladen. Einzige Win-Condition: Der Koenig muss sterben.")

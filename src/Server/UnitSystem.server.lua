@@ -1,4 +1,6 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local UnitConfig = require(ReplicatedStorage:WaitForChild("GameConfigs"):WaitForChild("UnitConfig"))
+local HexGridMath = require(ReplicatedStorage:WaitForChild("HexGridMath"))
 
 local getUnitsFunc = Instance.new("RemoteFunction")
 getUnitsFunc.Name = "GetUnitsData"
@@ -8,34 +10,63 @@ local moveEvent = Instance.new("RemoteEvent")
 moveEvent.Name = "MoveUnitEvent"
 moveEvent.Parent = ReplicatedStorage
 
--- Startaufstellung des Krieges: Fraktion Blau vs. Fraktion Rot
-local activeUnits = {
-    -- BLAUE ARMEE (Spieler 1)
-    ["Blue_King"] = { q = 0, r = 5, faction = "Blue", isKing = true, color = Color3.fromRGB(41, 128, 185), currentMoves = 3 },
-    ["Blue_Infantry_1"] = { q = 1, r = 5, faction = "Blue", isKing = false, color = Color3.fromRGB(41, 128, 185), currentMoves = 3 },
-    ["Blue_Infantry_2"] = { q = -1, r = 6, faction = "Blue", isKing = false, color = Color3.fromRGB(41, 128, 185), currentMoves = 3 },
+local endTurnEvent = Instance.new("RemoteEvent")
+endTurnEvent.Name = "EndTurnEvent"
+endTurnEvent.Parent = ReplicatedStorage
 
-    -- ROTE ARMEE (Spieler 2 / Gegner)
-    ["Red_King"] = { q = 0, r = -5, faction = "Red", isKing = true, color = Color3.fromRGB(192, 57, 43), currentMoves = 3 },
-    ["Red_Infantry_1"] = { q = -1, r = -5, faction = "Red", isKing = false, color = Color3.fromRGB(192, 57, 43), currentMoves = 3 },
-    ["Red_Infantry_2"] = { q = 1, r = -6, faction = "Red", isKing = false, color = Color3.fromRGB(192, 57, 43), currentMoves = 3 },
-}
+local activeUnits = {}
+local unitCounter = 0
+
+local function SpawnUnit(ownerId, unitType, q, r)
+    unitCounter += 1
+    local unitId = "Unit_" .. unitCounter
+    local config = UnitConfig[unitType]
+    
+    if not config then return end
+
+    activeUnits[unitId] = {
+        id = unitId,
+        ownerId = ownerId,
+        unitType = unitType,
+        q = q,
+        r = r,
+        hp = config.MaxHP,
+        maxMoves = config.Movement,
+        currentMoves = config.Movement,
+        hasCrown = (unitType == "King") 
+    }
+end
+
+SpawnUnit("Player1", "King", 0, 0)
+SpawnUnit("Player2", "King", 0, 5)
 
 getUnitsFunc.OnServerInvoke = function(player)
     return activeUnits
 end
 
-moveEvent.OnServerEvent:Connect(function(player, unitId, targetQ, targetR, path)
+moveEvent.OnServerEvent:Connect(function(player, unitId, targetQ, targetR)
     local unit = activeUnits[unitId]
     if unit then
-        -- In einer echten Version würde der Server hier den Pfad validieren.
-        -- Für das Konzept übernehmen wir die neue Position direkt.
-        unit.q = targetQ
-        unit.r = targetR
+        local path = HexGridMath.FindPath(unit.q, unit.r, targetQ, targetR)
         
-        -- Alle Clients anweisen, die Bewegung abzuspielen
-        moveEvent:FireAllClients(unitId, path)
+        if path and #path > 0 and #path <= unit.currentMoves then
+            unit.q = targetQ
+            unit.r = targetR
+            unit.currentMoves = unit.currentMoves - #path
+            
+            moveEvent:FireAllClients(unitId, path, unit.currentMoves)
+        end
     end
 end)
 
-print("Server: Kriegssimulator initialisiert. Truppen stehen bereit!")
+endTurnEvent.OnServerEvent:Connect(function(player)
+    print(string.format("Server: %s hat die Runde beendet!", player.Name))
+    for _, unit in pairs(activeUnits) do
+        -- Punkte für alle Einheiten wieder auf Maximum setzen!
+        unit.currentMoves = unit.maxMoves
+    end
+    -- WICHTIG: Wir senden die komplett frische Liste an alle Clients zurück!
+    endTurnEvent:FireAllClients(activeUnits)
+end)
+
+print("Server: UnitSystem synchronisiert die Runden-Resets nun direkt!")

@@ -1,43 +1,43 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local HexGridMath = require(ReplicatedStorage:WaitForChild("HexGridMath"))
 
-local foundCityEvent = Instance.new("RemoteEvent")
-foundCityEvent.Name = "FoundCityEvent"
-foundCityEvent.Parent = ReplicatedStorage
+local cityEvent = Instance.new("RemoteEvent")
+cityEvent.Name = "CityEvent"
+cityEvent.Parent = ReplicatedStorage
 
 local getCitiesFunc = Instance.new("RemoteFunction")
 getCitiesFunc.Name = "GetCitiesData"
 getCitiesFunc.Parent = ReplicatedStorage
 
--- Speichert alle Städte (CityId -> {q, r, owner, name, level})
+-- Speichert alle Städte (Key = "q_r")
 local activeCities = {}
-local cityCounter = 0
 
 getCitiesFunc.OnServerInvoke = function(player)
     return activeCities
 end
 
-foundCityEvent.OnServerEvent:Connect(function(player, q, r)
-    -- Prüfe, ob auf dem Feld bereits eine Stadt steht
-    for _, city in pairs(activeCities) do
-        if city.q == q and city.r == r then
-            return -- Feld ist bereits besetzt
+cityEvent.OnServerEvent:Connect(function(player, action, q, r)
+    if action == "Found" then
+        local key = q .. "_" .. r
+        
+        -- Prüfen, ob hier schon eine Stadt steht
+        if activeCities[key] then
+            print("Server: Hier steht bereits eine Stadt!")
+            return
         end
+        
+        -- Stadt in der Datenbank anlegen
+        activeCities[key] = {
+            q = q, 
+            r = r, 
+            ownerId = player.UserId, 
+            ownerName = player.Name,
+            population = 1
+        }
+        
+        print(string.format("Server: Stadt gegründet von %s auf (%d, %d)", player.Name, q, r))
+        
+        -- Alle Clients anweisen, das 3D-Modell der Stadt zu rendern
+        cityEvent:FireAllClients("RenderCity", activeCities[key])
     end
-    
-    cityCounter += 1
-    local cityId = "City_" .. cityCounter
-    
-    activeCities[cityId] = {
-        q = q,
-        r = r,
-        owner = player.UserId,
-        name = "Stadt " .. cityCounter,
-        level = 1
-    }
-    
-    print(string.format("Server: Spieler %s hat neue Stadt bei (%d, %d) gegründet!", player.Name, q, r))
-    
-    -- Informiere alle Clients über die neue Stadt
-    foundCityEvent:FireAllClients(cityId, q, r)
 end)

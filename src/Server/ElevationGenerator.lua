@@ -2,11 +2,13 @@ local ElevationGenerator = {}
 
 function ElevationGenerator.Generate(q, r, noiseVal)
     if noiseVal < 0.22 then
-        return "Water", 1 -- Level 1
+        return "Water", 1 -- Level 1: Reines Wasser
     elseif noiseVal < 0.80 then
-        -- Flachland-Terrassen (Level 2 bis 4)
-        if noiseVal < 0.40 then return "Flat", 2
-        elseif noiseVal < 0.60 then return "Flat", 3
+        -- Flachland-Terrassen (Neu: Level 1 bis 4)
+        -- noiseVal 0.22 bis 0.30 wird zu "Küsten-Flachland", das den gleichen Sockel wie Wasser hat!
+        if noiseVal < 0.30 then return "Flat", 1
+        elseif noiseVal < 0.48 then return "Flat", 2
+        elseif noiseVal < 0.64 then return "Flat", 3
         else return "Flat", 4 end
     elseif noiseVal < 0.90 then
         -- Raueres Hügelland (Level 5 und 6)
